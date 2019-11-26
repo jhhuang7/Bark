@@ -8,11 +8,17 @@
 // Hash defines to avoid magic numbers.
 #define HUMAN 'h'
 #define AUTO 'a'
+#define INITHAND 5
 #define HANDSIZE 6
 #define MINDIMENSION 3
 #define MAXDIMENSION 100
 #define EMPTYBOARDSPACE '.'
 #define EMPTYFILEBDSPACE '*'
+#define BUFFERSIZE 200
+#define MAXDECKSIZE 234
+#define NUMPLAYERS 2
+#define PLAYERONE 0
+#define PLAYERTWO 1
 
 // Enum to represent exit status.
 typedef enum {
@@ -45,13 +51,13 @@ typedef struct {
     char type;
     Card hand[HANDSIZE];
     int score;
+    int prevCardPos;
 } Player;
 
 // Game struct to hold all important info about the game.
 typedef struct {
     Deck deck;
-    Player p1;
-    Player p2;
+    Player players[NUMPLAYERS];
     int width;
     int height;
     Card** board;
@@ -63,4 +69,9 @@ Status check_arguments(int argc, char** argv, Game* game);
 Status parse_deckfile(const char* deckfile, Game* game);
 Status parse_savefile(const char* savefile, Game* game);
 void print_board(Game* game);
+void print_hand(Game* game, int player);
+void fill_hand(Game* game, int player);
+void draw_card(Game* game, int player, int position);
+void get_move(Game* game);
+void human_move(Game* game, int player);
 Status game_loop(Game* game);
