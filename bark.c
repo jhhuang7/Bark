@@ -50,6 +50,7 @@ Status check_arguments(int argc, char** argv, Game* game) {
             game->players[PLAYERTWO].type = *(argv[5]);
             game->players[PLAYERTWO].score = 0;
             game->players[PLAYERTWO].prevCardPos = INITHAND;
+            game->playerTurn = PLAYERONE;
 
             char* widtherr;
             int width = strtol(argv[2], &widtherr, 10);
@@ -62,6 +63,7 @@ Status check_arguments(int argc, char** argv, Game* game) {
             }
             game->width = width;
             game->height = height;
+            game->spacesFilled = 0;
             game->board = malloc(sizeof(Card*) * height);
             for (int i = 0; i < height; i++) {
                 game->board[i] = malloc(sizeof(Card) * width);
@@ -102,7 +104,7 @@ Status parse_deckfile(const char* deckfile, Game* game) {
     int numCards = strtol(line, &numerr, 10);
     if (*numerr != '\n' || numCards > MAXDECKSIZE) {
         return BADDECK;
-    } else if (numCards < 11) {
+    } else if (numCards < MINDECKSIZE) {
         return SHORTDECK;
     }
 
@@ -144,7 +146,7 @@ Status parse_savefile(const char* savefile, Game* game) {
         return BADSAVE;
     }
 
-    // Parse savefile and check for errors.
+    // Parse savefile to store info and check for errors.
     // -"Unable to parse savefile\n"
     // -"Unable to parse deckfile\n"
     // -"Short deck\n"
@@ -231,21 +233,129 @@ void draw_card(Game* game, int player, int position) {
  * Params: Game struct.
  * Returns: nothing (void).
  */
-void get_move(Game* game) {
+Status get_move(Game* game, int player) {
     while(1) {
         printf("Move? ");
 
-        // Check for if player is trying to SAVE
+        char move[BUFFERSIZE];
+        int c, i = 0;
+        do {
+            c = fgetc(stdin);
+            if (feof(stdin)) { 
+                return ENDINPUT;
+            }
+            if (c == '\n') {
+                break;
+            }
+            move[i] = (char)c;
+            i++;
+        } while(1);
 
-        /*
-        if (valid_move) {
-            // Store input info
+        // Check for if player is trying to SAVE
+        if (strncmp(move, "SAVE", 4) == 0) {
+            char filename[BUFFERSIZE];
+            memset(filename, '\0', sizeof(filename));
+            strncpy(filename, move + 4, strlen(move) - 4);
+
+            save_game(game, filename);
+            continue;
+        }
+
+        int card, col, row;
+        char lastit[BUFFERSIZE];
+        int numvars = sscanf(move, "%d %d %d%s", &card, &col, &row, lastit);
+        if (numvars != 3) {
+            continue;
+        }
+        if (valid_move(game, card, col, row)) {
             // Place card on board
+            game->board[row - 1][col - 1].rank 
+                = game->players[player].hand[card - 1].rank;
+            game->board[row - 1][col - 1].suit
+                = game->players[player].hand[card - 1].suit;
+            // Store input info
+            game->spacesFilled += 1;
+            game->players[player].prevCardPos = card - 1;
             break;
         }
-        */
-        
     }
+
+    return NORMAL;
+}
+
+/**
+ * Checks if the given human input is a valid move.
+ * Params: Game struct, ints of card pos played, col and row of board to place.
+ * Returns: true of false if the move is valid.
+ */
+bool valid_move(Game* game, int card, int col, int row) {
+    if (card < 1 || card > 6) {
+        return false;
+    }
+
+    if (col < 1 || col > game->width) {
+        return false;
+    }
+
+    if (row < 1 || row > game->height) {
+        return false;
+    }
+
+    // Check if valid on board
+    if (game->spacesFilled == 0) {
+        return true;
+    }
+    
+    return true;
+}
+
+/**
+ * Saves a game if player has entered a command to.
+ * Params: Game struct, string of file to save to.
+ * Returns: nothing (void).
+ */
+void save_game(Game* game, char* filename) {
+    FILE* file;
+    file = fopen(filename, "w");
+
+    if (strlen(filename) < 1 || !file) {
+        printf("Unable to save\n");
+        return;
+    }
+
+    fprintf(file, "%d %d %d %d\n", game->width, game->height, 
+        game->deck.cardsPlayed, game->playerTurn + 1);
+
+    fprintf(file, "%s\n", game->deck.deckfile);
+
+    for (int i = 0; i < HANDSIZE; i++) {
+        fprintf(file, "%c%c", game->players[PLAYERONE].hand[i].rank, 
+            game->players[PLAYERONE].hand[i].suit);
+    }
+    fprintf(file, "\n");
+
+    for (int i = 0; i < HANDSIZE; i++) {
+        fprintf(file, "%c%c", game->players[PLAYERTWO].hand[i].rank, 
+            game->players[PLAYERTWO].hand[i].suit);
+    }
+    fprintf(file, "\n");
+
+    for (int i = 0; i < game->height; i++) {
+        for (int j = 0; j < game->width; j++) {
+            if (game->board[i][j].rank == EMPTYBOARDSPACE && 
+                    game->board[i][j].suit == EMPTYBOARDSPACE) {
+                fprintf(file, "%c%c", EMPTYFILEBDSPACE, EMPTYFILEBDSPACE);
+            } else {
+                fprintf(file, "%c%c", 
+                    game->board[i][j].rank, game->board[i][j].suit);
+            }
+        }
+        if (i < game->height - 1) {
+            fprintf(file, "\n");
+        }
+    }
+
+    fclose(file);
 }
 
 /**
@@ -253,7 +363,8 @@ void get_move(Game* game) {
  * Params: Game struct, player number int.
  * Returns: nothing (void).
  */
-void human_move(Game* game, int player) {
+Status human_move(Game* game, int player) {
+    game->playerTurn = player;
 
     print_board(game);
 
@@ -261,8 +372,28 @@ void human_move(Game* game, int player) {
 
     print_hand(game, player);
 
-    get_move(game);
+    return get_move(game, player);
+}
 
+/**
+ * Handles logic for an automated move.
+ * Params: Game struct, player number int.
+ * Returns: nothing (void).
+ */
+void auto_move(Game* game, int player) {
+    game->playerTurn = player;
+
+    print_board(game);
+
+    draw_card(game, player, game->players[player].prevCardPos);
+
+    print_hand(game, player);
+    
+    // Auto move logic.
+
+    // Printed move to stdout.
+    sleep(1);
+    printf("Player %d plays ?? in column ? row ?\n", player + 1);
 }
 
 /**
@@ -271,16 +402,66 @@ void human_move(Game* game, int player) {
  * Returns: a status depending what happens.
  */
 Status game_loop(Game* game) {
-
     fill_hand(game, PLAYERONE);
     fill_hand(game, PLAYERTWO);
 
-    // human_move(game, PLAYERONE);
+    Status move;
 
+    while (1) {
+        if (game->spacesFilled == game->width * game->height || 
+                game->deck.numCards - (game->deck.cardsPlayed + 1) 
+                < MINDECKSIZE) {
+            break;
+        }
+        
+        switch(game->players[PLAYERONE].type) {
+            case HUMAN:
+                move = human_move(game, PLAYERONE);
+                break;
+            case AUTO:
+                auto_move(game, PLAYERONE);
+                break;
+        }
+        
+        if (game->spacesFilled == game->width * game->height || 
+                game->deck.numCards - (game->deck.cardsPlayed + 1) 
+                < MINDECKSIZE) {
+            break;
+        }
+
+        switch(game->players[PLAYERTWO].type) {
+            case HUMAN:
+                move = human_move(game, PLAYERTWO);
+                break;
+            case AUTO:
+                auto_move(game, PLAYERTWO);
+                break;
+        }     
+    }
+
+    if (move != NORMAL) {
+        return move;
+    }
+
+    cal_scores(game);
     free(game->board);
     free(game->deck.cards);
 
     return NORMAL;
+}
+
+/**
+ * Calculates the scores for the players at the end of a game.
+ * Params: Game struct.
+ * Returns: nothing (void).
+ */
+void cal_scores(Game* game) {
+    
+    // Calculate scores logic.
+
+    // Print scores to stdout.
+    printf("Player 1=? Player 2=?\n");
+
 }
 
 /**
@@ -294,5 +475,5 @@ int main(int argc, char** argv) {
         return show_message(args);
     }
 
-    return game_loop(&game);
+    return show_message(game_loop(&game));
 }

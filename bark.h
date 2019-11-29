@@ -16,6 +16,7 @@
 #define EMPTYFILEBDSPACE '*'
 #define BUFFERSIZE 200
 #define MAXDECKSIZE 234
+#define MINDECKSIZE 11
 #define NUMPLAYERS 2
 #define PLAYERONE 0
 #define PLAYERTWO 1
@@ -61,6 +62,8 @@ typedef struct {
     int width;
     int height;
     Card** board;
+    int playerTurn;
+    int spacesFilled;
 } Game;
 
 // Function declarations.
@@ -72,6 +75,10 @@ void print_board(Game* game);
 void print_hand(Game* game, int player);
 void fill_hand(Game* game, int player);
 void draw_card(Game* game, int player, int position);
-void get_move(Game* game);
-void human_move(Game* game, int player);
+Status get_move(Game* game, int player);
+bool valid_move(Game* game, int card, int col, int row);
+void save_game(Game* game, char* filename);
+Status human_move(Game* game, int player);
+void auto_move(Game* game, int player);
 Status game_loop(Game* game);
+void cal_scores(Game* game);
