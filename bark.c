@@ -305,8 +305,42 @@ bool valid_move(Game* game, int card, int col, int row) {
     if (game->spacesFilled == 0) {
         return true;
     }
+
+    int x = col - 1;
+    int y = row - 1;
+    int t = y - 1;
+    int l = x - 1;
+    int d = y + 1;
+    int r = x + 1;
+
+    if (t == -1) {
+        t = game->height - 1;
+    }
+    if (l == -1) {
+        l = game->width - 1;
+    }
+    if (d == game->height) {
+        d = 0;
+    }
+    if (r == game->width) {
+        r = 0;
+    }
+
+    if (game->board[y][x].rank == EMPTYBOARDSPACE 
+            && game->board[y][x].rank == EMPTYBOARDSPACE) {
+        if ((game->board[t][x].rank == EMPTYBOARDSPACE 
+                && game->board[t][x].rank == EMPTYBOARDSPACE) ||
+                (game->board[y][l].rank == EMPTYBOARDSPACE 
+                && game->board[y][l].rank == EMPTYBOARDSPACE) ||
+                (game->board[d][x].rank == EMPTYBOARDSPACE 
+                && game->board[d][x].rank == EMPTYBOARDSPACE) ||
+                (game->board[y][r].rank == EMPTYBOARDSPACE 
+                && game->board[y][r].rank == EMPTYBOARDSPACE)) {
+            return true;
+        }
+    }
     
-    return true;
+    return false;
 }
 
 /**
@@ -390,10 +424,51 @@ void auto_move(Game* game, int player) {
     print_hand(game, player);
     
     // Auto move logic.
+    int x;
+    int y;
+
+    if (game->spacesFilled == 0) {
+        x = game->width / 2;
+        y = game->height / 2;
+    } else {
+        switch (player){
+            case PLAYERONE:
+                for (int i = 0; i < game->height; i++) {
+                    for (int j = 0; j < game->width; j++) {
+                        if (valid_move(game, 1, i + 1, j + 1)) {
+                            x = j + 1;
+                            y = i + 1;
+                        }
+                    }
+                }
+                break;
+            case PLAYERTWO:
+                for (int i = game->height - 1; i > -1; i--) {
+                    for (int j = game->width - 1; j > -1; j--) {
+                        if (valid_move(game, 1, i + 1, j + 1)) {
+                            x = j + 1;
+                            y = i + 1;
+                        }
+                    }
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    game->board[y - 1][x - 1].rank 
+            = game->players[player].hand[0].rank;
+    game->board[y - 1][x - 1].suit
+        = game->players[player].hand[0].suit;
+    game->spacesFilled += 1;
+    game->players[player].prevCardPos = 0;
 
     // Printed move to stdout.
     sleep(1);
-    printf("Player %d plays ?? in column ? row ?\n", player + 1);
+    printf("Player %d plays %c%c in column %d row %d\n", player + 1, 
+        game->players[player].hand[0].rank, 
+        game->players[player].hand[0].suit, x, y);
 }
 
 /**
@@ -414,7 +489,7 @@ Status game_loop(Game* game) {
             break;
         }
         
-        switch(game->players[PLAYERONE].type) {
+        switch (game->players[PLAYERONE].type) {
             case HUMAN:
                 move = human_move(game, PLAYERONE);
                 break;
@@ -429,7 +504,7 @@ Status game_loop(Game* game) {
             break;
         }
 
-        switch(game->players[PLAYERTWO].type) {
+        switch (game->players[PLAYERTWO].type) {
             case HUMAN:
                 move = human_move(game, PLAYERTWO);
                 break;
