@@ -82,12 +82,26 @@ Status check_arguments(int argc, char** argv, Game* game) {
 }
 
 /**
+ * Checks if a given card is valid.
+ * Params: characters of rank, suit and end char.
+ * Returns: true of false.
+ */
+bool valid_card(char rank, char suit) {
+     if (rank < '1' || rank > '9' || suit < 'A' || suit > 'Z') {
+        return false;
+    }
+
+    return true;
+}
+
+/**
  * Attempts to parse a deckfile given a filename and add it to the game.
  * Param: string of deckfile name, Game struct.
  * Returns: error status.
  */
 Status parse_deckfile(const char* deckfile, Game* game) {
-    game->deck.deckfile = deckfile;
+    game->deck.deckfile = malloc(sizeof(const char) * BUFFERSIZE);
+    strcpy(game->deck.deckfile, deckfile);
     game->deck.cardsPlayed = 0;
 
     FILE* file = fopen(deckfile, "r");
@@ -116,9 +130,8 @@ Status parse_deckfile(const char* deckfile, Game* game) {
             free(game->deck.cards);
             return BADDECK;
         }
-        if (((line[2] != '\n') && (line[2] != '\0')) ||
-                line[0] < '1' || line[0] > '9' ||
-                line[1] < 'A' || line[1] > 'Z') {
+        if (!valid_card(line[0], line[1]) || 
+                ((line[2] != '\n') && (line[2] != '\0'))) {
             free(game->deck.cards);
             return BADDECK;
         }
@@ -134,25 +147,122 @@ Status parse_deckfile(const char* deckfile, Game* game) {
 
 /**
  * Attempts to load a savefile given a filename and add it to the game.
- * Param: string of savefile name, Game struct.
+ * Params: string of savefile name, Game struct.
  * Returns: error status.
  */
 Status parse_savefile(const char* savefile, Game* game) {
-
-    printf("%s\n", savefile); // debug
-
     FILE* file = fopen(savefile, "r");
     if (!file) {
         return BADSAVE;
     }
 
-    // Parse savefile to store info and check for errors.
-    // -"Unable to parse savefile\n"
-    // -"Unable to parse deckfile\n"
-    // -"Short deck\n"
-    // -"Board full\n"
+    char line[BUFFERSIZE];
+    if (!fgets(line, BUFFERSIZE, file)) {
+        return BADSAVE;
+    }
+
+    int width, height, cardsPlayed, playerTurn;
+    if ((sscanf(line, "%d %d %d %d", &width, &height, &cardsPlayed, 
+            &playerTurn) != 4) || (playerTurn < 1 || playerTurn > 2 || 
+            width < MINDIMENSION || width > MAXDIMENSION || 
+            height < MINDIMENSION || height > MAXDIMENSION || 
+            !fgets(line, BUFFERSIZE, file))) {
+        return BADSAVE;
+    }
+
+    line[strlen(line) - 1] = '\0';
+    if (parse_deckfile(line, game) != NORMAL) {
+        return BADDECK;
+    }
+
+    game->width = width;
+    game->height = height;
+    game->playerTurn = playerTurn - 1;
+    game->deck.cardsPlayed = cardsPlayed - 1;  
+
+    for (int i = 0; i < NUMPLAYERS; i++) {
+        if (!fgets(line, BUFFERSIZE, file) || !get_hand(line, game, i)) {
+            return BADSAVE;
+        }
+    }
+
+    if (!get_board(game, width, height, file)) {
+        return BADSAVE;
+    }
+
+    if (game->spacesFilled >= game->height * game->width) {
+        fclose(file);
+        return BOARDFULL;
+    }
+
+    fclose(file);
 
     return NORMAL;
+}
+
+/**
+ * Fills a player's hand from a savefile.
+ * Params: string line to parse, game struct, player number.
+ * Returns: true or false based on success or not.
+ */
+bool get_hand(const char* line, Game* game, int player) {
+    for (int i = 0; i < HANDSIZE; i++) {
+        if ((line[2 * i] == '\0') || (line[2 * i] == '\n')) {
+            return true;
+        } else if (valid_card(line[2 * i], line[2 * i + 1])) {
+            game->players[player].hand[i].rank = line[2 * i];
+            game->players[player].hand[i].suit = line[2 * i + 1];
+        } else {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Fillls a game board from a savefile.
+ * Params: game struct, width and height numbers, the file pointer to be read.
+ * Returns: rue or false based on success or not.
+ */
+bool get_board(Game* game, int width, int height, FILE* file) {
+    game->board = malloc(sizeof(Card*) * height);
+    game->spacesFilled = 0;
+    for (int i = 0; i < height; i++) {
+        game->board[i] = malloc(sizeof(Card) * width);
+        for (int j = 0; j < width; j++) {
+            game->board[i][j].rank = EMPTYBOARDSPACE;
+            game->board[i][j].suit = EMPTYBOARDSPACE;
+        }
+    }
+
+    for (int x = 0; x < height; x++) {
+        for (int y = 0; y < width; y++) {
+            int char1 = fgetc(file);
+            int char2 = fgetc(file);
+            if (char1 == EOF || char2 == EOF) {
+                return false;
+            }
+            if ((char1 == EMPTYFILEBDSPACE) && (char2 == EMPTYFILEBDSPACE)) {
+                continue;
+            } else if (valid_card(char1, char2)) {
+                game->board[x][y].rank = char1;
+                game->board[x][y].suit = char2;
+                game->spacesFilled += 1;
+            } else {
+                return false;
+            }
+        }
+
+        if (x < height - 1) {
+            char charend = fgetc(file);
+            if (charend != '\n') {
+                return false;
+            }
+        }
+    }
+
+    return true;
 }
 
 /**
@@ -327,15 +437,15 @@ bool valid_move(Game* game, int card, int col, int row) {
     }
 
     if (game->board[y][x].rank == EMPTYBOARDSPACE 
-            && game->board[y][x].rank == EMPTYBOARDSPACE) {
+            && game->board[y][x].suit == EMPTYBOARDSPACE) {
         if ((game->board[t][x].rank == EMPTYBOARDSPACE 
-                && game->board[t][x].rank == EMPTYBOARDSPACE) ||
+                && game->board[t][x].suit == EMPTYBOARDSPACE) ||
                 (game->board[y][l].rank == EMPTYBOARDSPACE 
-                && game->board[y][l].rank == EMPTYBOARDSPACE) ||
+                && game->board[y][l].suit == EMPTYBOARDSPACE) ||
                 (game->board[d][x].rank == EMPTYBOARDSPACE 
-                && game->board[d][x].rank == EMPTYBOARDSPACE) ||
+                && game->board[d][x].suit == EMPTYBOARDSPACE) ||
                 (game->board[y][r].rank == EMPTYBOARDSPACE 
-                && game->board[y][r].rank == EMPTYBOARDSPACE)) {
+                && game->board[y][r].suit == EMPTYBOARDSPACE)) {
             return true;
         }
     }
@@ -431,7 +541,7 @@ void auto_move(Game* game, int player) {
         x = game->width / 2;
         y = game->height / 2;
     } else {
-        switch (player){
+        switch (player) {
             case PLAYERONE:
                 for (int i = 0; i < game->height; i++) {
                     for (int j = 0; j < game->width; j++) {
@@ -489,29 +599,27 @@ Status game_loop(Game* game) {
             break;
         }
         
-        switch (game->players[PLAYERONE].type) {
-            case HUMAN:
-                move = human_move(game, PLAYERONE);
-                break;
-            case AUTO:
-                auto_move(game, PLAYERONE);
-                break;
-        }
-        
-        if (game->spacesFilled == game->width * game->height || 
-                game->deck.numCards - (game->deck.cardsPlayed + 1) 
-                < MINDECKSIZE) {
-            break;
-        }
-
-        switch (game->players[PLAYERTWO].type) {
-            case HUMAN:
-                move = human_move(game, PLAYERTWO);
-                break;
-            case AUTO:
-                auto_move(game, PLAYERTWO);
-                break;
-        }     
+        if (game->playerTurn % 2 == PLAYERONE) {
+            switch (game->players[PLAYERONE].type) {
+                case HUMAN:
+                    move = human_move(game, PLAYERONE);
+                    break;
+                case AUTO:
+                    auto_move(game, PLAYERONE);
+                    break;
+            }
+            game->playerTurn += 1;
+        } else {
+            switch (game->players[PLAYERTWO].type) {
+                case HUMAN:
+                    move = human_move(game, PLAYERTWO);
+                    break;
+                case AUTO:
+                    auto_move(game, PLAYERTWO);
+                    break;
+            }
+            game->playerTurn += 1; 
+        } 
     }
 
     if (move != NORMAL) {
@@ -535,7 +643,8 @@ void cal_scores(Game* game) {
     // Calculate scores logic.
 
     // Print scores to stdout.
-    printf("Player 1=? Player 2=?\n");
+    printf("Player 1=%d Player 2=%d\n", 
+        game->players[PLAYERONE].score, game->players[PLAYERTWO].score);
 
 }
 

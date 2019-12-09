@@ -41,7 +41,7 @@ typedef struct {
 
 // Deck struct to hold a list of cards.
 typedef struct {
-    const char* deckfile;
+    char* deckfile;
     Card* cards;
     int numCards;
     int cardsPlayed;
@@ -69,8 +69,11 @@ typedef struct {
 // Function declarations.
 Status show_message(Status status);
 Status check_arguments(int argc, char** argv, Game* game);
+bool valid_card(char rank, char suit);
 Status parse_deckfile(const char* deckfile, Game* game);
 Status parse_savefile(const char* savefile, Game* game);
+bool get_hand(const char* line, Game* game, int player);
+bool get_board(Game* game, int width, int height, FILE* file);
 void print_board(Game* game);
 void print_hand(Game* game, int player);
 void fill_hand(Game* game, int player);
