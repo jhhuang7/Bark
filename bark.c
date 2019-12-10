@@ -56,9 +56,8 @@ Status check_arguments(int argc, char** argv, Game* game) {
             int width = strtol(argv[2], &widtherr, 10);
             char* heighterr;
             int height = strtol(argv[3], &heighterr, 10);
-            if (width < MINDIMENSION || width > MAXDIMENSION ||
-                    strcmp(widtherr, "") != 0 || height < MINDIMENSION ||
-                    height > MAXDIMENSION || strcmp(heighterr, "") != 0) {
+            if (!valid_dimensions(width, height) || 
+                    strcmp(widtherr, "") != 0 || strcmp(heighterr, "") != 0) {
                 return INCARGTYPE;
             }
             game->width = width;
@@ -81,10 +80,25 @@ Status check_arguments(int argc, char** argv, Game* game) {
     return NORMAL;
 }
 
+
+/**
+ * Checks if given board dimensions are valid.
+ * Params: int width and height.
+ * Returns true or false.
+ */
+bool valid_dimensions(int width, int height) {
+    if (width < MINDIMENSION || width > MAXDIMENSION ||
+            height < MINDIMENSION || height > MAXDIMENSION) {
+        return false;
+    }
+
+    return true;
+}
+
 /**
  * Checks if a given card is valid.
  * Params: characters of rank, suit and end char.
- * Returns: true of false.
+ * Returns: true or false.
  */
 bool valid_card(char rank, char suit) {
      if (rank < '1' || rank > '9' || suit < 'A' || suit > 'Z') {
@@ -164,8 +178,7 @@ Status parse_savefile(const char* savefile, Game* game) {
     int width, height, cardsPlayed, playerTurn;
     if ((sscanf(line, "%d %d %d %d", &width, &height, &cardsPlayed, 
             &playerTurn) != 4) || (playerTurn < 1 || playerTurn > 2 || 
-            width < MINDIMENSION || width > MAXDIMENSION || 
-            height < MINDIMENSION || height > MAXDIMENSION || 
+            !valid_dimensions(width, height) || 
             !fgets(line, BUFFERSIZE, file))) {
         return BADSAVE;
     }
@@ -221,13 +234,14 @@ bool get_hand(const char* line, Game* game, int player) {
 }
 
 /**
- * Fillls a game board from a savefile.
+ * Fills a game board from a savefile.
  * Params: game struct, width and height numbers, the file pointer to be read.
  * Returns: rue or false based on success or not.
  */
 bool get_board(Game* game, int width, int height, FILE* file) {
     game->board = malloc(sizeof(Card*) * height);
     game->spacesFilled = 0;
+
     for (int i = 0; i < height; i++) {
         game->board[i] = malloc(sizeof(Card) * width);
         for (int j = 0; j < width; j++) {
@@ -438,14 +452,14 @@ bool valid_move(Game* game, int card, int col, int row) {
 
     if (game->board[y][x].rank == EMPTYBOARDSPACE 
             && game->board[y][x].suit == EMPTYBOARDSPACE) {
-        if ((game->board[t][x].rank == EMPTYBOARDSPACE 
-                && game->board[t][x].suit == EMPTYBOARDSPACE) ||
-                (game->board[y][l].rank == EMPTYBOARDSPACE 
-                && game->board[y][l].suit == EMPTYBOARDSPACE) ||
-                (game->board[d][x].rank == EMPTYBOARDSPACE 
-                && game->board[d][x].suit == EMPTYBOARDSPACE) ||
-                (game->board[y][r].rank == EMPTYBOARDSPACE 
-                && game->board[y][r].suit == EMPTYBOARDSPACE)) {
+        if ((game->board[t][x].rank != EMPTYBOARDSPACE 
+                && game->board[t][x].suit != EMPTYBOARDSPACE) ||
+                (game->board[y][l].rank != EMPTYBOARDSPACE 
+                && game->board[y][l].suit != EMPTYBOARDSPACE) ||
+                (game->board[d][x].rank != EMPTYBOARDSPACE 
+                && game->board[d][x].suit != EMPTYBOARDSPACE) ||
+                (game->board[y][r].rank != EMPTYBOARDSPACE 
+                && game->board[y][r].suit != EMPTYBOARDSPACE)) {
             return true;
         }
     }
@@ -574,7 +588,7 @@ void auto_move(Game* game, int player) {
     game->spacesFilled += 1;
     game->players[player].prevCardPos = 0;
 
-    // Printed move to stdout.
+    // Print move to stdout.
     sleep(1);
     printf("Player %d plays %c%c in column %d row %d\n", player + 1, 
         game->players[player].hand[0].rank, 
@@ -634,18 +648,84 @@ Status game_loop(Game* game) {
 }
 
 /**
+ * Is the card at the specified location of higher rank than the rank parameter.
+ * Params: game struct, card rank, int for column and row.
+ * Returns: true if cell is empty or contains a higher ranked card.
+ */
+bool is_greater(Game* game, char rank, int col, int row) {
+    return (game->board[row][col].rank != EMPTYBOARDSPACE)
+            && (game->board[row][col].rank > rank);
+}
+
+/**
+ * Calculate the maximum points possible for a path travelling through a cell.
+ * Params: game struct, column and row number, suit char.
+ * Returns: an int score.
+ */
+int score_pos(Game* game, int col, int row, char suit) {
+    int width = game->width;
+    int height = game->height;
+    Card current = game->board[row][col];
+    int total = (current.suit == suit ? 1 : 0);
+
+    // Right direction
+    if (is_greater(game, current.rank, (col + width - 1) % width, row)) {
+        int result = score_pos(game, (col + width - 1) % width, row, suit);
+        if ((result != 0) && (result + 1 > total)) {
+            total = result + 1;
+        }
+    }
+
+    // Left direction
+    if (is_greater(game, current.rank, (col + 1) % width, row)) {
+        int result = score_pos(game, (col + 1) % width, row, suit);
+        if ((result != 0) && (result + 1 > total)) { 
+            total = result + 1;
+        }
+    }
+
+    // Down direction
+    if (is_greater(game, current.rank, col, (row + 1) % height)) {
+        int result = score_pos(game, col, (row + 1) % height, suit);
+        if ((result != 0) && (result + 1 > total)) { 
+            total = result + 1;
+        }
+    }
+
+    // Up direction
+    if (is_greater(game, current.rank, col, (row + height - 1) % height)) {
+        int result = score_pos(game, col, (row + height - 1) % height, suit);
+        if ((result != 0) && (result + 1 > total)) { 
+            total = result + 1;
+        }
+    }
+
+    return total;
+}
+
+/**
  * Calculates the scores for the players at the end of a game.
  * Params: Game struct.
  * Returns: nothing (void).
  */
 void cal_scores(Game* game) {
-    
     // Calculate scores logic.
+    for (int i = 0; i < game->height; i++) {
+        for (int j = 0; j < game->width; j++) {
+            if (game->board[i][j].rank != EMPTYBOARDSPACE && 
+                    game->board[i][j].suit != EMPTYBOARDSPACE) {
+                char suit = game->board[i][j].suit;
+                int score = score_pos(game, j, i, suit);
+                if (game->players[suit - 'A' % 2].score < score) {
+                    game->players[suit - 'A' % 2].score = score;
+                }
+            }
+        }
+    }
 
     // Print scores to stdout.
     printf("Player 1=%d Player 2=%d\n", 
         game->players[PLAYERONE].score, game->players[PLAYERTWO].score);
-
 }
 
 /**

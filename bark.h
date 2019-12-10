@@ -69,6 +69,7 @@ typedef struct {
 // Function declarations.
 Status show_message(Status status);
 Status check_arguments(int argc, char** argv, Game* game);
+bool valid_dimensions(int width, int height);
 bool valid_card(char rank, char suit);
 Status parse_deckfile(const char* deckfile, Game* game);
 Status parse_savefile(const char* savefile, Game* game);
@@ -84,4 +85,6 @@ void save_game(Game* game, char* filename);
 Status human_move(Game* game, int player);
 void auto_move(Game* game, int player);
 Status game_loop(Game* game);
+bool is_greater(Game* game, char rank, int col, int row);
+int score_pos(Game* game, int col, int row, char suit);
 void cal_scores(Game* game);
