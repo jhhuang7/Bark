@@ -37,7 +37,6 @@ Status check_arguments(int argc, char** argv, Game* game) {
             game->players[PLAYERTWO].type = *(argv[3]);
             game->players[PLAYERTWO].score = 0;
             game->players[PLAYERTWO].prevCardPos = INITHAND;
-            
             return parse_savefile(argv[1], game);
         case 6:
             if ((*(argv[4]) != HUMAN && *(argv[4]) != AUTO) ||
@@ -51,7 +50,6 @@ Status check_arguments(int argc, char** argv, Game* game) {
             game->players[PLAYERTWO].score = 0;
             game->players[PLAYERTWO].prevCardPos = INITHAND;
             game->playerTurn = PLAYERONE;
-
             char* widtherr;
             int width = strtol(argv[2], &widtherr, 10);
             char* heighterr;
@@ -71,12 +69,10 @@ Status check_arguments(int argc, char** argv, Game* game) {
                     game->board[i][j].suit = EMPTYBOARDSPACE;
                 }
             }
-
             return parse_deckfile(argv[1], game);
         default:
             return INCNUMARGS;
     }
-
     return NORMAL;
 }
 
@@ -101,7 +97,7 @@ bool valid_dimensions(int width, int height) {
  * Returns: true or false.
  */
 bool valid_card(char rank, char suit) {
-     if (rank < '1' || rank > '9' || suit < 'A' || suit > 'Z') {
+    if (rank < '1' || rank > '9' || suit < 'A' || suit > 'Z') {
         return false;
     }
 
@@ -114,7 +110,7 @@ bool valid_card(char rank, char suit) {
  * Returns: error status.
  */
 Status parse_deckfile(const char* deckfile, Game* game) {
-    game->deck.deckfile = malloc(sizeof(const char) * BUFFERSIZE);
+    game->deck.deckfile = malloc(sizeof(char) * BUFFERSIZE);
     strcpy(game->deck.deckfile, deckfile);
     game->deck.cardsPlayed = 0;
 
@@ -308,7 +304,7 @@ void print_hand(Game* game, int player) {
     printf("Hand(%d): ", player + 1);
     for (int i = 0; i < HANDSIZE; i++) {
         printf("%c%c", game->players[player].hand[i].rank, 
-            game->players[player].hand[i].suit);
+                game->players[player].hand[i].suit);
         if (i != HANDSIZE - 1) {
             printf(" ");
         }
@@ -324,9 +320,9 @@ void print_hand(Game* game, int player) {
 void fill_hand(Game* game, int player) {
     for (int i = 0; i < INITHAND; i++) {
         game->players[player].hand[i].rank = 
-            game->deck.cards[game->deck.cardsPlayed].rank;
+                game->deck.cards[game->deck.cardsPlayed].rank;
         game->players[player].hand[i].suit = 
-            game->deck.cards[game->deck.cardsPlayed].suit;
+                game->deck.cards[game->deck.cardsPlayed].suit;
         game->deck.cardsPlayed += 1;
     }
 }
@@ -339,132 +335,17 @@ void fill_hand(Game* game, int player) {
 void draw_card(Game* game, int player, int position) {
     for (int i = position; i < HANDSIZE; i++) {
         game->players[player].hand[i].rank = 
-            game->players[player].hand[i + 1].rank;
+                game->players[player].hand[i + 1].rank;
         game->players[player].hand[i].suit = 
-            game->deck.cards[i + 1].suit;
+                game->players[player].hand[i + 1].suit;
     }
 
     // Fill the last card with new card from deck.
     game->players[player].hand[INITHAND].rank = 
-        game->deck.cards[game->deck.cardsPlayed].rank;
+            game->deck.cards[game->deck.cardsPlayed].rank;
     game->players[player].hand[INITHAND].suit = 
-        game->deck.cards[game->deck.cardsPlayed].suit;
+            game->deck.cards[game->deck.cardsPlayed].suit;
     game->deck.cardsPlayed += 1;
-}
-
-/**
- * Asks the player for a move and if valid, place card on the board.
- * Params: Game struct.
- * Returns: nothing (void).
- */
-Status get_move(Game* game, int player) {
-    while(1) {
-        printf("Move? ");
-
-        char move[BUFFERSIZE];
-        int c, i = 0;
-        do {
-            c = fgetc(stdin);
-            if (feof(stdin)) { 
-                return ENDINPUT;
-            }
-            if (c == '\n') {
-                break;
-            }
-            move[i] = (char)c;
-            i++;
-        } while(1);
-
-        // Check for if player is trying to SAVE
-        if (strncmp(move, "SAVE", 4) == 0) {
-            char filename[BUFFERSIZE];
-            memset(filename, '\0', sizeof(filename));
-            strncpy(filename, move + 4, strlen(move) - 4);
-
-            save_game(game, filename);
-            continue;
-        }
-
-        int card, col, row;
-        char lastit[BUFFERSIZE];
-        int numvars = sscanf(move, "%d %d %d%s", &card, &col, &row, lastit);
-        if (numvars != 3) {
-            continue;
-        }
-        if (valid_move(game, card, col, row)) {
-            // Place card on board
-            game->board[row - 1][col - 1].rank 
-                = game->players[player].hand[card - 1].rank;
-            game->board[row - 1][col - 1].suit
-                = game->players[player].hand[card - 1].suit;
-            // Store input info
-            game->spacesFilled += 1;
-            game->players[player].prevCardPos = card - 1;
-            break;
-        }
-    }
-
-    return NORMAL;
-}
-
-/**
- * Checks if the given human input is a valid move.
- * Params: Game struct, ints of card pos played, col and row of board to place.
- * Returns: true of false if the move is valid.
- */
-bool valid_move(Game* game, int card, int col, int row) {
-    if (card < 1 || card > 6) {
-        return false;
-    }
-
-    if (col < 1 || col > game->width) {
-        return false;
-    }
-
-    if (row < 1 || row > game->height) {
-        return false;
-    }
-
-    // Check if valid on board
-    if (game->spacesFilled == 0) {
-        return true;
-    }
-
-    int x = col - 1;
-    int y = row - 1;
-    int t = y - 1;
-    int l = x - 1;
-    int d = y + 1;
-    int r = x + 1;
-
-    if (t == -1) {
-        t = game->height - 1;
-    }
-    if (l == -1) {
-        l = game->width - 1;
-    }
-    if (d == game->height) {
-        d = 0;
-    }
-    if (r == game->width) {
-        r = 0;
-    }
-
-    if (game->board[y][x].rank == EMPTYBOARDSPACE 
-            && game->board[y][x].suit == EMPTYBOARDSPACE) {
-        if ((game->board[t][x].rank != EMPTYBOARDSPACE 
-                && game->board[t][x].suit != EMPTYBOARDSPACE) ||
-                (game->board[y][l].rank != EMPTYBOARDSPACE 
-                && game->board[y][l].suit != EMPTYBOARDSPACE) ||
-                (game->board[d][x].rank != EMPTYBOARDSPACE 
-                && game->board[d][x].suit != EMPTYBOARDSPACE) ||
-                (game->board[y][r].rank != EMPTYBOARDSPACE 
-                && game->board[y][r].suit != EMPTYBOARDSPACE)) {
-            return true;
-        }
-    }
-    
-    return false;
 }
 
 /**
@@ -482,19 +363,25 @@ void save_game(Game* game, char* filename) {
     }
 
     fprintf(file, "%d %d %d %d\n", game->width, game->height, 
-        game->deck.cardsPlayed, game->playerTurn + 1);
+            game->deck.cardsPlayed, game->playerTurn + 1);
 
     fprintf(file, "%s\n", game->deck.deckfile);
 
     for (int i = 0; i < HANDSIZE; i++) {
-        fprintf(file, "%c%c", game->players[PLAYERONE].hand[i].rank, 
-            game->players[PLAYERONE].hand[i].suit);
+        if (valid_card(game->players[PLAYERONE].hand[i].rank, 
+                game->players[PLAYERONE].hand[i].suit)) {
+            fprintf(file, "%c%c", game->players[PLAYERONE].hand[i].rank, 
+                    game->players[PLAYERONE].hand[i].suit);
+        }
     }
     fprintf(file, "\n");
 
     for (int i = 0; i < HANDSIZE; i++) {
-        fprintf(file, "%c%c", game->players[PLAYERTWO].hand[i].rank, 
-            game->players[PLAYERTWO].hand[i].suit);
+        if (valid_card(game->players[PLAYERTWO].hand[i].rank, 
+                game->players[PLAYERTWO].hand[i].suit)) {
+            fprintf(file, "%c%c", game->players[PLAYERTWO].hand[i].rank, 
+                    game->players[PLAYERTWO].hand[i].suit);
+        }
     }
     fprintf(file, "\n");
 
@@ -505,7 +392,7 @@ void save_game(Game* game, char* filename) {
                 fprintf(file, "%c%c", EMPTYFILEBDSPACE, EMPTYFILEBDSPACE);
             } else {
                 fprintf(file, "%c%c", 
-                    game->board[i][j].rank, game->board[i][j].suit);
+                        game->board[i][j].rank, game->board[i][j].suit);
             }
         }
         if (i < game->height - 1) {
@@ -534,11 +421,67 @@ Status human_move(Game* game, int player) {
 }
 
 /**
+ * Asks the player for a move and if valid, place card on the board.
+ * Params: Game struct.
+ * Returns: nothing (void).
+ */
+Status get_move(Game* game, int player) {
+    while(1) {
+        printf("Move? ");
+
+        char move[BUFFERSIZE];
+        int c, i = 0;
+        do {
+            c = fgetc(stdin);
+            if (feof(stdin)) { 
+                return ENDINPUT;
+            }
+            if (c == '\n') {
+                break;
+            }
+            move[i] = (char)c;
+            i++;
+        } while(1);
+
+        // Check for if player is trying to SAVE.
+        if (strncmp(move, "SAVE", 4) == 0) {
+            char filename[BUFFERSIZE];
+            for (int j = 4; j < strlen(move); j++) {
+                filename[j - 4] = move[j];
+            }
+            filename[strlen(move) - 3] = '\0';
+            save_game(game, filename);
+            continue;
+        }
+
+        int card, col, row;
+        char lastit[BUFFERSIZE];
+        int numvars = sscanf(move, "%d %d %d%s", &card, &col, &row, lastit);
+        if (numvars != 4) {
+            continue;
+        }
+        if (valid_move(game, card, col, row)) {
+            // Place card on board.
+            game->board[row - 1][col - 1].rank 
+                    = game->players[player].hand[card - 1].rank;
+            game->board[row - 1][col - 1].suit
+                    = game->players[player].hand[card - 1].suit;
+            // Store input info.
+            game->spacesFilled += 1;
+            game->players[player].prevCardPos = card - 1;
+            break;
+        }
+    }
+
+    return NORMAL;
+}
+
+/**
  * Handles logic for an automated move.
  * Params: Game struct, player number int.
  * Returns: nothing (void).
  */
-void auto_move(Game* game, int player) {
+Status auto_move(Game* game, int player) {
     game->playerTurn = player;
 
     print_board(game);
@@ -554,14 +497,16 @@ void auto_move(Game* game, int player) {
     if (game->spacesFilled == 0) {
         x = game->width / 2;
         y = game->height / 2;
+        return make_move(game, x, y, player);
     } else {
         switch (player) {
             case PLAYERONE:
                 for (int i = 0; i < game->height; i++) {
                     for (int j = 0; j < game->width; j++) {
-                        if (valid_move(game, 1, i + 1, j + 1)) {
+                        if (valid_move(game, 1, j + 1, i + 1)) {
                             x = j + 1;
                             y = i + 1;
+                            return make_move(game, x, y, player);
                         }
                     }
                 }
@@ -569,9 +514,10 @@ void auto_move(Game* game, int player) {
             case PLAYERTWO:
                 for (int i = game->height - 1; i > -1; i--) {
                     for (int j = game->width - 1; j > -1; j--) {
-                        if (valid_move(game, 1, i + 1, j + 1)) {
+                        if (valid_move(game, 1, j + 1, i + 1)) {
                             x = j + 1;
                             y = i + 1;
+                            return make_move(game, x, y, player);
                         }
                     }
                 }
@@ -581,18 +527,29 @@ void auto_move(Game* game, int player) {
         }
     }
 
+    return NORMAL;
+}
+
+/**
+ * Makes a move for an automated player.
+ * Params: game struct, x and y coordinates and player number.
+ * Returns: nothing (void).
+ */
+Status make_move(Game* game, int x, int y, int player) {
     game->board[y - 1][x - 1].rank 
             = game->players[player].hand[0].rank;
     game->board[y - 1][x - 1].suit
-        = game->players[player].hand[0].suit;
+            = game->players[player].hand[0].suit;
     game->spacesFilled += 1;
     game->players[player].prevCardPos = 0;
 
     // Print move to stdout.
     sleep(1);
     printf("Player %d plays %c%c in column %d row %d\n", player + 1, 
-        game->players[player].hand[0].rank, 
-        game->players[player].hand[0].suit, x, y);
+            game->players[player].hand[0].rank, 
+            game->players[player].hand[0].suit, x, y);
+    
+    return NORMAL;
 }
 
 /**
@@ -619,7 +576,7 @@ Status game_loop(Game* game) {
                     move = human_move(game, PLAYERONE);
                     break;
                 case AUTO:
-                    auto_move(game, PLAYERONE);
+                    move = auto_move(game, PLAYERONE);
                     break;
             }
             game->playerTurn += 1;
@@ -629,26 +586,84 @@ Status game_loop(Game* game) {
                     move = human_move(game, PLAYERTWO);
                     break;
                 case AUTO:
-                    auto_move(game, PLAYERTWO);
+                    move = auto_move(game, PLAYERTWO);
                     break;
             }
             game->playerTurn += 1; 
-        } 
+        }
+
+        if (move != NORMAL) {
+            return move;
+        }
     }
 
-    if (move != NORMAL) {
-        return move;
-    }
-
+    print_board(game);
     cal_scores(game);
     free(game->board);
     free(game->deck.cards);
 
-    return NORMAL;
+    return move;
 }
 
 /**
- * Is the card at the specified location of higher rank than the rank parameter.
+ * Checks if the given human input is a valid move.
+ * Params: Game struct, ints of card pos played, col and row of board to place.
+ * Returns: true of false if the move is valid.
+ */
+bool valid_move(Game* game, int card, int col, int row) {
+    if (card < 1 || card > 6) {
+        return false;
+    }
+    if (col < 1 || col > game->width) {
+        return false;
+    }
+    if (row < 1 || row > game->height) {
+        return false;
+    }
+
+    // Check if valid on board.
+    if (game->spacesFilled == 0) {
+        return true;
+    }
+
+    int x = col - 1;
+    int y = row - 1;
+    int t = y - 1;
+    int l = x - 1;
+    int d = y + 1;
+    int r = x + 1;
+    if (t == -1) {
+        t = game->height - 1;
+    }
+    if (l == -1) {
+        l = game->width - 1;
+    }
+    if (d == game->height) {
+        d = 0;
+    }
+    if (r == game->width) {
+        r = 0;
+    }
+
+    if (game->board[y][x].rank == EMPTYBOARDSPACE && 
+            game->board[y][x].suit == EMPTYBOARDSPACE) {
+        if ((game->board[t][x].rank != EMPTYBOARDSPACE &&
+                game->board[t][x].suit != EMPTYBOARDSPACE) ||
+                (game->board[y][l].rank != EMPTYBOARDSPACE && 
+                game->board[y][l].suit != EMPTYBOARDSPACE) ||
+                (game->board[d][x].rank != EMPTYBOARDSPACE && 
+                game->board[d][x].suit != EMPTYBOARDSPACE) ||
+                (game->board[y][r].rank != EMPTYBOARDSPACE && 
+                game->board[y][r].suit != EMPTYBOARDSPACE)) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+/**
+ * Is the card at the specified location of higher rank than the rank param.
  * Params: game struct, card rank, int for column and row.
  * Returns: true if cell is empty or contains a higher ranked card.
  */
@@ -668,7 +683,7 @@ int score_pos(Game* game, int col, int row, char suit) {
     Card current = game->board[row][col];
     int total = (current.suit == suit ? 1 : 0);
 
-    // Right direction
+    // Right direction.
     if (is_greater(game, current.rank, (col + width - 1) % width, row)) {
         int result = score_pos(game, (col + width - 1) % width, row, suit);
         if ((result != 0) && (result + 1 > total)) {
@@ -676,7 +691,7 @@ int score_pos(Game* game, int col, int row, char suit) {
         }
     }
 
-    // Left direction
+    // Left direction.
     if (is_greater(game, current.rank, (col + 1) % width, row)) {
         int result = score_pos(game, (col + 1) % width, row, suit);
         if ((result != 0) && (result + 1 > total)) { 
@@ -684,7 +699,7 @@ int score_pos(Game* game, int col, int row, char suit) {
         }
     }
 
-    // Down direction
+    // Down direction.
     if (is_greater(game, current.rank, col, (row + 1) % height)) {
         int result = score_pos(game, col, (row + 1) % height, suit);
         if ((result != 0) && (result + 1 > total)) { 
@@ -692,7 +707,7 @@ int score_pos(Game* game, int col, int row, char suit) {
         }
     }
 
-    // Up direction
+    // Up direction.
     if (is_greater(game, current.rank, col, (row + height - 1) % height)) {
         int result = score_pos(game, col, (row + height - 1) % height, suit);
         if ((result != 0) && (result + 1 > total)) { 
@@ -708,7 +723,7 @@ int score_pos(Game* game, int col, int row, char suit) {
  * Params: Game struct.
  * Returns: nothing (void).
  */
-void cal_scores(Game* game) {
+int cal_scores(Game* game) {
     // Calculate scores logic.
     for (int i = 0; i < game->height; i++) {
         for (int j = 0; j < game->width; j++) {
@@ -716,8 +731,8 @@ void cal_scores(Game* game) {
                     game->board[i][j].suit != EMPTYBOARDSPACE) {
                 char suit = game->board[i][j].suit;
                 int score = score_pos(game, j, i, suit);
-                if (game->players[suit - 'A' % 2].score < score) {
-                    game->players[suit - 'A' % 2].score = score;
+                if (game->players[(suit - 'A') % 2].score < score) {
+                    game->players[(suit - 'A') % 2].score = score;
                 }
             }
         }
@@ -725,7 +740,9 @@ void cal_scores(Game* game) {
 
     // Print scores to stdout.
     printf("Player 1=%d Player 2=%d\n", 
-        game->players[PLAYERONE].score, game->players[PLAYERTWO].score);
+            game->players[PLAYERONE].score, game->players[PLAYERTWO].score);
+
+    return game->players[PLAYERONE].score > game->players[PLAYERTWO].score;   
 }
 
 /**
