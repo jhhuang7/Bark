@@ -457,7 +457,7 @@ Status get_move(Game* game, int player) {
         int card, col, row;
         char lastit[BUFFERSIZE];
         int numvars = sscanf(move, "%d %d %d%s", &card, &col, &row, lastit);
-        if (numvars != 4) {
+        if (numvars != 4 && numvars != 3) {
             continue;
         }
         if (valid_move(game, card, col, row)) {
